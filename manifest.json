@@ -2,7 +2,7 @@
   "manifest_version": 2,
   "name": "Axie Damage Calculator",
   "description": "This extension helps to calculate the damage done by an Axie",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "icons": {
     "96": "images/moz_icon96.png",
     "48": "images/moz_icon48.png"

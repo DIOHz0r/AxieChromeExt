@@ -6,6 +6,8 @@ var baseAxieType = "";
 
 var assumeDamageBonus = false;
 
+var critBonus = 0
+
 async function loadDragDrop(){
     //console.log("Loading drag and drop load");
     while(!document.querySelector("canvas")) {
@@ -29,9 +31,11 @@ async function loadDragDrop(){
 
     const axieDiv = document.querySelector("canvas");
 
+    const divDmgWapper = document.createElement("div");
+    divDmgWapper.className = 'mt-40'
     const divDmgHeader = document.createElement("div");
     divDmgHeader.className = 'font-bold text-20 leading-24 text-white mb-12';
-    divDmgHeader.innerText = 'Damage'
+    divDmgHeader.innerText = 'Damage - Critical Hit Damage Bonus ' + Math.floor(getCritBonus()) + '%';
     const divDmgContainer = document.createElement("div");
     divDmgContainer.className = "rounded-12 border border-gray-3 px-16 py-16 bg-gray-4 overflow-hidden flex flex-wrap";
     divDmgContainer.style.width = "95%"
@@ -97,8 +101,12 @@ async function loadDragDrop(){
     divDmgContainer.append(damageBonusDiv);
     divDmgContainer.append(table);
 
-    axieDiv.parentElement.parentElement.parentElement.append(divDmgHeader);
-    axieDiv.parentElement.parentElement.parentElement.append(divDmgContainer);
+    divDmgWapper.appendChild(divDmgHeader);
+    divDmgWapper.appendChild(divDmgContainer);
+
+
+    axieDiv.parentElement.parentElement.prepend(divDmgWapper);
+
 }
 
 function getElementsByXPath(xpath, parent)
@@ -145,6 +153,24 @@ function clearData(){
 function assumeDamageBonusCheckbox(){
     assumeDamageBonus = document.getElementById('damageBonusBox').checked;
     renderMovesHtml();
+}
+
+function getCritBonus(){
+    if(critBonus == 0){
+        let morale = 27; // lowest morale in game
+        let moralIcon = 'M11.177 9.139c0 .132-.009.261-.023.39-.176 1.959-1.5 3.263-3.336 3.263-1.781 0-3.017-1.232-3.33-3.106a3.407 3.407 0 01-.046-.547l.012-.229c.043-.771.39-1.577.909-2.087l.363-.358.024.509c.012.236.128.458.337.642.107.094.365.195.676.195.161 0 .314-.028.442-.08a.596.596 0 00.397-.532c.023-.325-.107-.486-.272-.69-.184-.226-.413-.507-.534-1.13-.15-.778.287-1.514 1.23-2.073l.482-.285-.146.54a.995.995 0 00-.032.213c-.02.567.444 1.273 1.417 2.157 1.242 1.13 1.419 2.14 1.423 2.98l.007.228z';
+        let svgs = document.getElementsByTagName('svg');
+        for(var i = 0; i < svgs.length; i++) {
+            if (svgs[i].innerHTML.includes(moralIcon)) {
+                morale = svgs[i].nextElementSibling.innerHTML;
+                //console.log(morale);
+            }
+        }
+        critBonus = Math.sqrt(morale)*10+morale*0.4-18;
+        //console.log(critBonus);
+    }
+
+    return critBonus
 }
 
 
@@ -214,7 +240,8 @@ function renderMovesHtml(){
         //15% bonus for moves if they are the same type as base axie body
         let sameTypeBonus = calcSameTypeBonus(moveJson.type, baseAxieType);
         //figure out damage bonus from card
-        let dmgBonus = moveJson.hasOwnProperty('damageBonus') && assumeDamageBonus ? moveJson.damageBonus : 1;
+        let dmgBonus = moveJson.hasOwnProperty('damageBonus') && assumeDamageBonus ? calcAssumeDamageBonus(moveJson.damageBonus,moveJson.name) : 1;
+
             //console.log(moveJson.hasOwnProperty('damageBonus') && assumeDamageBonus);
         let numberOfAttacks = calcNumberOfAttacks(moveJson.name);
 
@@ -223,14 +250,17 @@ function renderMovesHtml(){
         var dmgVsPlant = calcDamage(moveJson.damage,calcAttackRPS(moveJson.type, "PRD"), sameTypeBonus, comboBonus,dmgBonus, numberOfAttacks);
         plantDmgTotal += dmgVsPlant;
         cell1.innerHTML = dmgVsPlant
+        cell1.title = "Crit Dmg " + calcCritDamage(moveJson.damage,calcAttackRPS(moveJson.type, "PRD"), sameTypeBonus, comboBonus,dmgBonus, moveJson.name);
 
         var dmgVsBird = calcDamage(moveJson.damage,calcAttackRPS(moveJson.type, "ABD"), sameTypeBonus, comboBonus,dmgBonus, numberOfAttacks);
         birdDmgTotal += dmgVsBird;
         cell2.innerHTML = dmgVsBird
-        
+        cell2.title = "Crit Dmg " + calcCritDamage(moveJson.damage,calcAttackRPS(moveJson.type, "ABD"), sameTypeBonus, comboBonus,dmgBonus, moveJson.name);
+
         var dmgVsBug = calcDamage(moveJson.damage,calcAttackRPS(moveJson.type, "BBM"), sameTypeBonus, comboBonus,dmgBonus, numberOfAttacks);
         bugDmgTotal += dmgVsBug;
         cell3.innerHTML = dmgVsBug;
+        cell3.title = "Crit Dmg " + calcCritDamage(moveJson.damage,calcAttackRPS(moveJson.type, "BBM"), sameTypeBonus, comboBonus,dmgBonus, moveJson.name);
 
         engTotal += moveJson.energy;
         cell4.innerHTML = moveJson.energy;
@@ -253,8 +283,30 @@ function renderMovesHtml(){
 }
 function calcDamage(damage,attackRPS,typeBonus,combo,damageBonus,numberOfAttacks){
     //console.log("damage: "+damage+" damageBonus:" +damageBonus +" attackRPS:" + attackRPS +" typeBonus:" + typeBonus +" combo:" + combo +" numberOfAttacks:" + numberOfAttacks);
-    return Math.floor(damage * damageBonus * attackRPS * typeBonus + combo) * numberOfAttacks;
+    if(damage == 0)
+        return 0;
+    else
+        return Math.floor(damage * damageBonus * attackRPS * typeBonus + combo) * numberOfAttacks;
 }
+
+function calcCritDamage(damage,attackRPS,typeBonus,combo,damageBonus,cardName){
+    var critBonusPercent = (getCritBonus()/100+1)
+    //console.log(critBonusPercent)
+    if(damage == 0){
+        return 0;
+    }
+    else if (cardName === "Dual Blade"){ //ignore damage bonus as the bonus is a crit and crit bonus is fixed
+        damageBonus = 1;
+        critBonusPercent = 2;
+    }
+    else if (cardName ===  "Ronin"){ //ignore damage bonus as the bonus is a crit
+        damageBonus = 1;
+    }
+    //console.log(cardName +" - "+ damage +"  *" + damageBonus +"*" + attackRPS +"*" + typeBonus +"*" + critBonusPercent +"+" + combo)
+    return Math.floor(damage * damageBonus * attackRPS * typeBonus * critBonusPercent + combo) // seems to be off by 1 from what is displayed in the game
+}
+
+
 
 function calcAttackRPS(moveType,baseAxieType){
     if(plantReptileDusk.includes(moveType)){
@@ -293,11 +345,20 @@ function calcAttackRPS(moveType,baseAxieType){
     }
 }
 
+function calcAssumeDamageBonus(damageBonusAmt, cardName){
+     if (cardName === 'Ronin') {
+        return getCritBonus()/100 + 1
+     } else {
+        return damageBonusAmt;
+     }
+
+}
+
 function calcComboBonus(damage,baseAxieType){
     //console.log(baseAxieType);
     //console.log(skillArray);
     skill = skillArray[baseAxieType];
-    return (damage > 0) ? (skill * 0.55 - 12.5) : 0;
+    return (skill*0.55-12.5);
 }
 
 function calcNumberOfAttacks(moveName){
@@ -493,7 +554,8 @@ var axieJson = {
         "damage": 130,
         "shield": 20,
         "type": beast,
-        "energy": 1
+        "energy": 1,
+        "damageBonus":2
     },
     "beast-mouth-02.png":{
         "name": "Nut Cracker",
@@ -695,8 +757,8 @@ var axieJson = {
     },
     "plant-mouth-02.png":{
         "name": "Serious",
-        "damage": 95,
-        "shield": 55,
+        "damage": 30,
+        "shield": 30,
         "type": plant,
         "energy": 1
     },
@@ -892,7 +954,7 @@ var axieJson = {
         "energy": 1
     },
     "bird-back-12.png":{
-        "name": "Tri Feather",
+        "name": "Tri-Feather",
         "damage": 40,
         "shield": 10,
         "type": bird,
@@ -1226,9 +1288,9 @@ var axieJson = {
         "energy": 1
     },
     "reptile-mouth-08.png":{
-        "name": "Why So Serious",
-        "damage": 90,
-        "shield": 50,
+        "name": "Razor Bite",
+        "damage": 95,
+        "shield": 55,
         "type": reptile,
         "energy": 1
     },
